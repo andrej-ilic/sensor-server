@@ -1,13 +1,12 @@
 const axios = require("axios");
 const parser = require("fast-xml-parser");
-const moment = require("moment");
 
 class Sensor {
-  constructor() {
+  constructor(id, name, baseURL) {
+    this.id = id;
+    this.name = name;
     /** @type import('axios').AxiosInstance */
-    this.axios = axios.create({
-      baseURL: "http://147.91.209.167",
-    });
+    this.axios = axios.create({ baseURL });
   }
 
   sync() {
@@ -22,16 +21,13 @@ class Sensor {
     return {
       temperature: this.temperature,
       humidity: this.humidity,
-      time: this.unixTime,
     };
   }
 
   setData(data) {
     this.temperature = data.tmpr1;
     this.humidity = data.hum1;
-    this.time = moment();
-    this.unixTime = this.time.valueOf();
   }
 }
 
-module.exports = new Sensor();
+module.exports = Sensor;
