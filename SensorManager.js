@@ -38,12 +38,16 @@ class SensorManager {
       this.sensorUpdateJob.stop();
     }
 
-    this.sensorUpdateJob = new CronJob("30 * * * * *", async () => {
-      await this.sensor.sync();
-      const dataChanged = this.updateData();
-      if (dataChanged) {
-        this.persistSensorData();
-      }
+    this.sensorUpdateJob = new CronJob("30 * * * * *", () => {
+      this.sensor
+        .sync()
+        .then(() => {
+          const dataChanged = this.updateData();
+          if (dataChanged) {
+            return this.persistSensorData();
+          }
+        })
+        .catch((err) => console.error(err));
     });
 
     this.sensorUpdateJob.start();
@@ -54,9 +58,11 @@ class SensorManager {
       this.dataInsertJob.stop();
     }
 
-    this.dataInsertJob = new CronJob("40 3-59/4 * * * *", async () => {
-      await this.sensor.sync();
-      this.insertSensorData();
+    this.dataInsertJob = new CronJob("40 3-59/4 * * * *", () => {
+      this.sensor
+        .sync()
+        .then(() => this.insertSensorData())
+        .catch((err) => console.error(err));
     });
 
     this.dataInsertJob.start();
@@ -126,7 +132,11 @@ class SensorManager {
       return false;
     }
 
-    await this.sensor.sync();
+    try {
+      await this.sensor.sync();
+    } catch {
+      console.error("Failed to sync, initializing day with old data");
+    }
 
     await ref
       .create({
@@ -134,6 +144,7 @@ class SensorManager {
         averageTemperature: this.sensor.temperature,
         averageHumidity: this.sensor.humidity,
       })
+      .then(() => console.log(`Initialized new day ${getCurrentDate()}`))
       .catch((err) => console.error(err));
 
     return true;
@@ -152,7 +163,11 @@ class SensorManager {
       return false;
     }
 
-    await this.sensor.sync();
+    try {
+      await this.sensor.sync();
+    } catch {
+      console.error("Failed to sync, initializing sensor without data");
+    }
 
     await ref
       .create({
