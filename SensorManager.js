@@ -185,6 +185,7 @@ class SensorManager {
         humidity: this.sensor.humidity,
         averageTemperature: this.sensor.temperature,
         averageHumidity: this.sensor.humidity,
+        firstDayTimestamp: getCurrentDateUnixTime(),
         lastUpdateTime: Date.now(),
       })
       .catch((err) => console.error(err));
