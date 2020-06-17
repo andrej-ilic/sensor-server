@@ -1,6 +1,10 @@
 const CronJob = require("cron").CronJob;
 const { admin, db } = require("./firebase");
-const { getCurrentDate, calculateAverage } = require("./util");
+const {
+  getCurrentDate,
+  calculateAverage,
+  getCurrentDateUnixTime,
+} = require("./util");
 
 class SensorManager {
   /**
@@ -138,11 +142,16 @@ class SensorManager {
       console.error("Failed to sync, initializing day with old data");
     }
 
+    this.data.averageTemperature = this.sensor.temperature;
+    this.data.averageHumidity = this.sensor.humidity;
+    this.data.count = 0;
+
     await ref
       .create({
         data: [],
         averageTemperature: this.sensor.temperature,
         averageHumidity: this.sensor.humidity,
+        timestamp: getCurrentDateUnixTime(),
       })
       .then(() => console.log(`Initialized new day ${getCurrentDate()}`))
       .catch((err) => console.error(err));
