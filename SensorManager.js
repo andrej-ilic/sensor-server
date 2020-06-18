@@ -42,16 +42,16 @@ class SensorManager {
       this.sensorUpdateJob.stop();
     }
 
-    this.sensorUpdateJob = new CronJob("30 * * * * *", () => {
-      this.sensor
-        .sync()
-        .then(() => {
-          const dataChanged = this.updateData();
-          if (dataChanged) {
-            return this.persistSensorData();
-          }
-        })
-        .catch((err) => console.error(err));
+    this.sensorUpdateJob = new CronJob("30 * * * * *", async () => {
+      try {
+        await this.sensor.sync();
+        const dataChanged = this.updateData();
+        if (dataChanged) {
+          this.persistSensorData();
+        }
+      } catch (err) {
+        console.error(err);
+      }
     });
 
     this.sensorUpdateJob.start();
@@ -62,11 +62,13 @@ class SensorManager {
       this.dataInsertJob.stop();
     }
 
-    this.dataInsertJob = new CronJob("40 3-59/4 * * * *", () => {
-      this.sensor
-        .sync()
-        .then(() => this.insertSensorData())
-        .catch((err) => console.error(err));
+    this.dataInsertJob = new CronJob("40 3-59/4 * * * *", async () => {
+      try {
+        await this.sensor.sync();
+        this.insertSensorData();
+      } catch (err) {
+        console.error(err);
+      }
     });
 
     this.dataInsertJob.start();
@@ -272,14 +274,17 @@ class SensorManager {
       dataChanged = true;
     }
 
-    this.data.temperature = this.sensor.temperature;
-    this.data.humidity = this.sensor.humidity;
-    this.data.averageTemperature = newAverageTemperature;
-    this.data.averageHumidity = newAverageHumidity;
-    this.data.maxTemperature = newMaxTemperature;
-    this.data.minTemperature = newMinTemperature;
-    this.data.maxHumidity = newMaxHumidity;
-    this.data.minHumidity = newMinHumidity;
+    if (!isNaN(this.sensor.temperature))
+      this.data.temperature = this.sensor.temperature;
+    if (!isNaN(this.sensor.humidity)) this.data.humidity = this.sensor.humidity;
+    if (!isNaN(newAverageTemperature))
+      this.data.averageTemperature = newAverageTemperature;
+    if (!isNaN(newAverageHumidity))
+      this.data.averageHumidity = newAverageHumidity;
+    if (!isNaN(newMaxTemperature)) this.data.maxTemperature = newMaxTemperature;
+    if (!isNaN(newMinTemperature)) this.data.minTemperature = newMinTemperature;
+    if (!isNaN(newMaxHumidity)) this.data.maxHumidity = newMaxHumidity;
+    if (!isNaN(newMinHumidity)) this.data.minHumidity = newMinHumidity;
     this.data.count++;
 
     return dataChanged;
