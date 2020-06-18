@@ -86,6 +86,10 @@ class SensorManager {
           humidity: this.data.humidity,
           averageTemperature: this.data.averageTemperature,
           averageHumidity: this.data.averageHumidity,
+          maxTemperature: this.data.maxTemperature,
+          minTemperature: this.data.minTemperature,
+          maxHumidity: this.data.maxHumidity,
+          minHumidity: this.data.minHumidity,
           lastUpdateTime: Date.now(),
         },
         { merge: true }
@@ -113,6 +117,10 @@ class SensorManager {
         data: admin.firestore.FieldValue.arrayUnion(data),
         averageTemperature: this.data.averageTemperature,
         averageHumidity: this.data.averageHumidity,
+        maxTemperature: this.data.maxTemperature,
+        minTemperature: this.data.minTemperature,
+        maxHumidity: this.data.maxHumidity,
+        minHumidity: this.data.minHumidity,
       })
       .then(() => console.log(`${new Date()} new point added`))
       .catch((err) => console.error(err));
@@ -130,8 +138,12 @@ class SensorManager {
 
     if (doc.exists) {
       const data = doc.data();
-      this.data.averageTemperature = data.averageTemperature;
-      this.data.averageHumidity = data.averageHumidity;
+      this.data.averageTemperature = data.averageTemperature || 0;
+      this.data.averageHumidity = data.averageHumidity || 0;
+      this.data.maxTemperature = data.temperature || 0;
+      this.data.minTemperature = data.temperature || 999;
+      this.data.maxHumidity = data.humidity || 0;
+      this.data.minHumidity = data.humidity || 100;
       this.data.count = data.data.length;
       return false;
     }
@@ -144,6 +156,10 @@ class SensorManager {
 
     this.data.averageTemperature = this.sensor.temperature;
     this.data.averageHumidity = this.sensor.humidity;
+    this.data.maxTemperature = this.sensor.temperature;
+    this.data.minTemperature = this.sensor.temperature;
+    this.data.maxHumidity = this.sensor.humidity;
+    this.data.minHumidity = this.sensor.humidity;
     this.data.count = 0;
 
     await ref
@@ -151,6 +167,10 @@ class SensorManager {
         data: [],
         averageTemperature: this.sensor.temperature,
         averageHumidity: this.sensor.humidity,
+        maxTemperature: this.sensor.temperature,
+        minTemperature: this.sensor.temperature,
+        maxHumidity: this.sensor.humidity,
+        minHumidity: this.sensor.humidity,
         timestamp: getCurrentDateUnixTime(),
       })
       .then(() => console.log(`Initialized new day ${getCurrentDate()}`))
@@ -185,6 +205,10 @@ class SensorManager {
         humidity: this.sensor.humidity,
         averageTemperature: this.sensor.temperature,
         averageHumidity: this.sensor.humidity,
+        maxTemperature: this.sensor.temperature,
+        minTemperature: this.sensor.temperature,
+        maxHumidity: this.sensor.humidity,
+        minHumidity: this.sensor.humidity,
         firstDayTimestamp: getCurrentDateUnixTime(),
         lastUpdateTime: Date.now(),
       })
@@ -207,14 +231,30 @@ class SensorManager {
   updateData() {
     let dataChanged = false;
 
-    const averageTemperature = calculateAverage(
+    const newAverageTemperature = calculateAverage(
       this.data.averageTemperature,
       this.data.count,
       this.sensor.temperature
     );
-    const averageHumidity = calculateAverage(
+    const newAverageHumidity = calculateAverage(
       this.data.averageHumidity,
       this.data.count,
+      this.sensor.humidity
+    );
+    const newMaxTemperature = Math.max(
+      this.data.maxTemperature,
+      this.sensor.temperature
+    );
+    const newMinTemperature = Math.min(
+      this.data.minTemperature,
+      this.sensor.temperature
+    );
+    const newMaxHumidity = Math.max(
+      this.data.maxHumidity,
+      this.sensor.humidity
+    );
+    const newMinHumidity = Math.min(
+      this.data.minHumidity,
       this.sensor.humidity
     );
 
@@ -222,16 +262,24 @@ class SensorManager {
       this.data.temperature != this.sensor.temperature ||
       this.data.humidity != this.sensor.humidity ||
       this.data.averageTemperature.toFixed(1) !=
-        averageTemperature.toFixed(1) ||
-      this.data.averageHumidity.toFixed(1) != averageHumidity.toFixed(1)
+        newAverageTemperature.toFixed(1) ||
+      this.data.averageHumidity.toFixed(1) != newAverageHumidity.toFixed(1) ||
+      this.data.maxTemperature != newMaxTemperature ||
+      this.data.minTemperature != newMinTemperature ||
+      this.data.maxHumidity != newMaxHumidity ||
+      this.data.minHumidity != newMinHumidity
     ) {
       dataChanged = true;
     }
 
     this.data.temperature = this.sensor.temperature;
     this.data.humidity = this.sensor.humidity;
-    this.data.averageTemperature = averageTemperature;
-    this.data.averageHumidity = averageHumidity;
+    this.data.averageTemperature = newAverageTemperature;
+    this.data.averageHumidity = newAverageHumidity;
+    this.data.maxTemperature = newMaxTemperature;
+    this.data.minTemperature = newMinTemperature;
+    this.data.maxHumidity = newMaxHumidity;
+    this.data.minHumidity = newMinHumidity;
     this.data.count++;
 
     return dataChanged;
