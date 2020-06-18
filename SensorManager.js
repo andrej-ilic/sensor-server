@@ -140,10 +140,10 @@ class SensorManager {
       const data = doc.data();
       this.data.averageTemperature = data.averageTemperature || 0;
       this.data.averageHumidity = data.averageHumidity || 0;
-      this.data.maxTemperature = data.temperature || 0;
-      this.data.minTemperature = data.temperature || 999;
-      this.data.maxHumidity = data.humidity || 0;
-      this.data.minHumidity = data.humidity || 100;
+      this.data.maxTemperature = data.maxTemperature || 0;
+      this.data.minTemperature = data.minTemperature || 999;
+      this.data.maxHumidity = data.maxHumidity || 0;
+      this.data.minHumidity = data.minHumidity || 100;
       this.data.count = data.data.length;
       return false;
     }
