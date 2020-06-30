@@ -5,6 +5,13 @@ const {
   calculateAverage,
   getCurrentDateUnixTime,
 } = require("./util");
+const {
+  minimalTriggerHumiity,
+  minimalTriggerTemperature,
+  warningCooldownInMilliseconds,
+} = require("./constants");
+const Mailer = require("./Mailer");
+const Mail = require("nodemailer/lib/mailer");
 
 class SensorManager {
   /**
@@ -22,6 +29,7 @@ class SensorManager {
     this.startNewDayJob();
     this.startSensorUpdateJob();
     this.startDataInsertJob();
+    this.startWarningJob();
   }
 
   startNewDayJob() {
@@ -62,7 +70,7 @@ class SensorManager {
       this.dataInsertJob.stop();
     }
 
-    this.dataInsertJob = new CronJob("40 3-59/4 * * * *", async () => {
+    this.dataInsertJob = new CronJob("32 3-59/4 * * * *", async () => {
       try {
         await this.sensor.sync();
         this.insertSensorData();
@@ -72,6 +80,57 @@ class SensorManager {
     });
 
     this.dataInsertJob.start();
+  }
+
+  startWarningJob() {
+    if (this.warningJob) {
+      this.warningJob.stop();
+    }
+
+    this.warningJob = new CronJob("34 * * * * *", async () => {
+      try {
+        await this.sensor.sync();
+        this.checkLimitsAndSendWarningEmails();
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    this.warningJob.start();
+  }
+
+  async checkLimitsAndSendWarningEmails() {
+    if (
+      this.sensor.temperature > minimalTriggerTemperature ||
+      this.sensor.humidity > minimalTriggerHumiity
+    ) {
+      console.log("Temperature or humidity higher than limit");
+
+      const warningsRef = db.doc(`sensor/${this.sensor.id}/data/warnings`);
+
+      warningsRef
+        .get()
+        .then((doc) => {
+          const { emails, lastSendTime } = doc.data();
+
+          if (Date.now() - warningCooldownInMilliseconds > lastSendTime) {
+            console.log("Sending emails");
+
+            warningsRef
+              .set({ lastSendTime: Date.now() }, { merge: true })
+              .then(async () => {
+                for (let i = 0; i < emails.length; ++i) {
+                  await Mailer.sendEmail({
+                    to: emails[i],
+                    subject: `UPOZORENJE: Senzor ${this.sensor.name}`,
+                    text: `Senzor ${this.sensor.name} je pročitao vrednost koja prelazi dozvoljenu granicu.\n\nTrenutno stanje senzora:\nTemperatura: ${this.sensor.temperature}°C\nVlažnost: ${this.sensor.humidity}%`,
+                  });
+                }
+              });
+          }
+        })
+        .catch((err) => console.error(err));
+    }
   }
 
   /**
@@ -213,6 +272,15 @@ class SensorManager {
         minHumidity: this.sensor.humidity,
         firstDayTimestamp: getCurrentDateUnixTime(),
         lastUpdateTime: Date.now(),
+      })
+      .catch((err) => console.error(err));
+
+    const warningsRef = db.doc(`sensor/${this.senor.id}/data/warnings`);
+
+    await warningsRef
+      .create({
+        emails: [],
+        lastSendTime: -1,
       })
       .catch((err) => console.error(err));
 

@@ -11,7 +11,16 @@ class Sensor {
 
   sync() {
     return this.axios.get("status.xml").then((res) => {
+      if (parser.validate(res.data) !== true) {
+        throw new Error("Invalid sensor response");
+      }
+
       const data = parser.parse(res.data).response;
+
+      if (isNaN(parseFloat(data.tmpr1)) || isNaN(parseFloat(data.hum1))) {
+        throw new Error("Invalid sensor temperature or humidity");
+      }
+
       this.setData(data);
       return this.getData();
     });

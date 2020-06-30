@@ -1,3 +1,4 @@
 .env
 serviceAccountKey.json
+nodemailerConfig.json
 node_modules
