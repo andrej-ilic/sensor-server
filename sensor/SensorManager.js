@@ -1,17 +1,17 @@
 const CronJob = require("cron").CronJob;
-const { admin, db } = require("./firebase");
+const { admin, db } = require("../firebase");
 const {
   getCurrentDate,
   calculateAverage,
   getCurrentDateUnixTime,
-} = require("./util");
+} = require("../util");
 const {
   minimalTriggerHumiity,
   minimalTriggerTemperature,
   warningCooldownInMilliseconds,
-} = require("./constants");
-const Mailer = require("./Mailer");
-const log = require("./Logger");
+} = require("../util/constants");
+const Mailer = require("../util/Mailer");
+const log = require("../util/Logger");
 
 class SensorManager {
   /**
