@@ -11,7 +11,7 @@ const {
   warningCooldownInMilliseconds,
 } = require("./constants");
 const Mailer = require("./Mailer");
-const Mail = require("nodemailer/lib/mailer");
+const log = require("./Logger");
 
 class SensorManager {
   /**
@@ -58,7 +58,7 @@ class SensorManager {
           this.persistSensorData();
         }
       } catch (err) {
-        console.error(err);
+        log.error(err);
       }
     });
 
@@ -75,7 +75,7 @@ class SensorManager {
         await this.sensor.sync();
         this.insertSensorData();
       } catch (err) {
-        console.error(err);
+        log.error(err);
       }
     });
 
@@ -92,7 +92,7 @@ class SensorManager {
         await this.sensor.sync();
         this.checkLimitsAndSendWarningEmails();
       } catch (err) {
-        console.error(err);
+        log.error(err);
       }
     });
 
@@ -104,7 +104,7 @@ class SensorManager {
       this.sensor.temperature > minimalTriggerTemperature ||
       this.sensor.humidity > minimalTriggerHumiity
     ) {
-      console.log("Temperature or humidity higher than limit");
+      log.info("Temperature or humidity higher than limit");
 
       const warningsRef = db.doc(`sensor/${this.sensor.id}/data/warnings`);
 
@@ -114,22 +114,35 @@ class SensorManager {
           const { emails, lastSendTime } = doc.data();
 
           if (Date.now() - warningCooldownInMilliseconds > lastSendTime) {
-            console.log("Sending emails");
+            log.info("Cooldown passed, sending emails...");
 
             warningsRef
               .set({ lastSendTime: Date.now() }, { merge: true })
               .then(async () => {
                 for (let i = 0; i < emails.length; ++i) {
-                  await Mailer.sendEmail({
-                    to: emails[i],
-                    subject: `UPOZORENJE: Senzor ${this.sensor.name}`,
-                    text: `Senzor ${this.sensor.name} je pročitao vrednost koja prelazi dozvoljenu granicu.\n\nTrenutno stanje senzora:\nTemperatura: ${this.sensor.temperature}°C\nVlažnost: ${this.sensor.humidity}%`,
-                  });
+                  try {
+                    await Mailer.sendEmail({
+                      to: emails[i],
+                      subject: `UPOZORENJE: Senzor ${this.sensor.name}`,
+                      text: `Senzor ${this.sensor.name} je pročitao vrednost koja prelazi dozvoljenu granicu.\n\nTrenutno stanje senzora:\nTemperatura: ${this.sensor.temperature}°C\nVlažnost: ${this.sensor.humidity}%`,
+                    });
+                  } catch (err) {
+                    log.error(`Error while sending email to ${emails[i]}`);
+                    log.error(err);
+                  }
                 }
+                log.info("Emails sent");
+              })
+              .catch((err) => {
+                log.error("Error while updating warnings/sending emails");
+                log.error(err);
               });
           }
         })
-        .catch((err) => console.error(err));
+        .catch((err) => {
+          log.error("Failed to send warning emails");
+          log.error(err);
+        });
     }
   }
 
@@ -155,8 +168,11 @@ class SensorManager {
         },
         { merge: true }
       )
-      .then(() => console.log(`${new Date()} sensor updated`))
-      .catch((err) => console.error(err));
+      .then(() => log.info(`Sensor data updated`))
+      .catch((err) => {
+        log.error("Failed to update sensor data");
+        log.error(err);
+      });
   }
 
   /**
@@ -183,8 +199,11 @@ class SensorManager {
         maxHumidity: this.data.maxHumidity,
         minHumidity: this.data.minHumidity,
       })
-      .then(() => console.log(`${new Date()} new point added`))
-      .catch((err) => console.error(err));
+      .then(() => log.info(`New point added`))
+      .catch((err) => {
+        log.error("Failed to add new point");
+        log.error(err);
+      });
   }
 
   /**
@@ -206,13 +225,17 @@ class SensorManager {
       this.data.maxHumidity = data.maxHumidity || 0;
       this.data.minHumidity = data.minHumidity || 100;
       this.data.count = data.data.length;
+
+      log.info("Current day exists in Firestore");
+
       return false;
     }
 
     try {
       await this.sensor.sync();
-    } catch {
-      console.error("Failed to sync, initializing day with old data");
+    } catch (err) {
+      log.error("Failed to sync sensor");
+      log.error(err);
     }
 
     this.data.averageTemperature = this.sensor.temperature;
@@ -234,8 +257,11 @@ class SensorManager {
         minHumidity: this.sensor.humidity,
         timestamp: getCurrentDateUnixTime(),
       })
-      .then(() => console.log(`Initialized new day ${getCurrentDate()}`))
-      .catch((err) => console.error(err));
+      .then(() => log.info(`Created new day ${getCurrentDate()}`))
+      .catch((err) => {
+        log.error(`Failed to create new day ${getCurrentDate()}`);
+        log.error(err);
+      });
 
     return true;
   }
@@ -250,13 +276,15 @@ class SensorManager {
     const doc = await ref.get();
 
     if (doc.exists) {
+      log.info("Sensor exists");
       return false;
     }
 
     try {
       await this.sensor.sync();
-    } catch {
-      console.error("Failed to sync, initializing sensor without data");
+    } catch (err) {
+      log.error("Failed to sync sensor");
+      log.error(err);
     }
 
     await ref
@@ -273,7 +301,11 @@ class SensorManager {
         firstDayTimestamp: getCurrentDateUnixTime(),
         lastUpdateTime: Date.now(),
       })
-      .catch((err) => console.error(err));
+      .then(() => log.info("Created sensor in Firestore"))
+      .catch((err) => {
+        log.error("Failed to create sensor in Firestore");
+        log.error(err);
+      });
 
     const warningsRef = db.doc(`sensor/${this.senor.id}/data/warnings`);
 
@@ -282,7 +314,10 @@ class SensorManager {
         emails: [],
         lastSendTime: -1,
       })
-      .catch((err) => console.error(err));
+      .catch((err) => {
+        log.error("Failed to create warnings");
+        log.error(err);
+      });
 
     return true;
   }

@@ -1,4 +1,5 @@
 .env
 serviceAccountKey.json
 nodemailerConfig.json
-node_modules
+/node_modules
+/logs
