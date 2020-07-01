@@ -307,7 +307,7 @@ class SensorManager {
         log.error(err);
       });
 
-    const warningsRef = db.doc(`sensor/${this.senor.id}/data/warnings`);
+    const warningsRef = db.doc(`sensor/${this.sensor.id}/data/warnings`);
 
     await warningsRef
       .create({
