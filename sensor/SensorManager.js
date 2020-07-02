@@ -110,7 +110,12 @@ class SensorManager {
 
       warningsRef
         .get()
-        .then((doc) => {
+        .then(async (doc) => {
+          if (!doc.exists) {
+            await this.createWarnings();
+            return;
+          }
+
           const { emails, lastSendTime } = doc.data();
 
           if (Date.now() - warningCooldownInMilliseconds > lastSendTime) {
@@ -190,15 +195,19 @@ class SensorManager {
     };
 
     return await ref
-      .update({
-        data: admin.firestore.FieldValue.arrayUnion(data),
-        averageTemperature: this.data.averageTemperature,
-        averageHumidity: this.data.averageHumidity,
-        maxTemperature: this.data.maxTemperature,
-        minTemperature: this.data.minTemperature,
-        maxHumidity: this.data.maxHumidity,
-        minHumidity: this.data.minHumidity,
-      })
+      .set(
+        {
+          data: admin.firestore.FieldValue.arrayUnion(data),
+          averageTemperature: this.data.averageTemperature,
+          averageHumidity: this.data.averageHumidity,
+          maxTemperature: this.data.maxTemperature,
+          minTemperature: this.data.minTemperature,
+          maxHumidity: this.data.maxHumidity,
+          minHumidity: this.data.minHumidity,
+          timestamp: getCurrentDateUnixTime(),
+        },
+        { merge: true }
+      )
       .then(() => log.info(`New point added`))
       .catch((err) => {
         log.error("Failed to add new point");
@@ -307,19 +316,24 @@ class SensorManager {
         log.error(err);
       });
 
+    await this.createWarnings();
+
+    return true;
+  }
+
+  createWarnings() {
     const warningsRef = db.doc(`sensor/${this.sensor.id}/data/warnings`);
 
-    await warningsRef
+    return warningsRef
       .create({
         emails: [],
         lastSendTime: -1,
       })
+      .then(() => log.info("Warnings created"))
       .catch((err) => {
         log.error("Failed to create warnings");
         log.error(err);
       });
-
-    return true;
   }
 
   initializeData() {
