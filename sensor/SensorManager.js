@@ -5,7 +5,10 @@ const {
   calculateAverage,
   getCurrentDateUnixTime,
 } = require("../util");
-const { warningCooldownInMilliseconds } = require("../util/constants");
+const {
+  warningCooldownInMilliseconds,
+  timespanToKeepInMilliseconds,
+} = require("../util/constants");
 const Mailer = require("../util/Mailer");
 const log = require("../util/Logger");
 
@@ -36,6 +39,7 @@ class SensorManager {
     this.newDayJob = new CronJob("0 0 0 * * *", async () => {
       this.initializeData();
       await this.initializeDayInFirestore();
+      this.deleteOldDataInFirestore();
     });
 
     this.newDayJob.start();
@@ -328,6 +332,39 @@ class SensorManager {
     await this.createWarnings();
 
     return true;
+  }
+
+  deleteOldDataInFirestore() {
+    const lastDayToKeepTimestamp =
+      getCurrentDateUnixTime() - timespanToKeepInMilliseconds;
+
+    db.collection(`sensor/${this.sensor.id}/data`)
+      .where("timestamp", "<", lastDayToKeepTimestamp)
+      .get()
+      .then((docs) => {
+        docs.forEach((doc) =>
+          doc.ref
+            .delete()
+            .then(() => log.info(`Deleted day ${doc.id}`))
+            .catch((err) => {
+              log.error(`Error while deleting day ${doc.id}`);
+              log.error(err);
+            })
+        );
+      })
+      .catch((err) => {
+        log.error("Error while deleting old data");
+        log.error(err);
+      })
+      .finally(() =>
+        db
+          .doc(`sensor/${this.sensor.id}`)
+          .set({ firstDayTimestamp: lastDayToKeepTimestamp }, { merge: true })
+          .catch((err) => {
+            log.error("Error while setting new firstDayTimestamp");
+            log.error(err);
+          })
+      );
   }
 
   createWarnings() {
