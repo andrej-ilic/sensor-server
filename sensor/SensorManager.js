@@ -5,11 +5,7 @@ const {
   calculateAverage,
   getCurrentDateUnixTime,
 } = require("../util");
-const {
-  minimalTriggerHumiity,
-  minimalTriggerTemperature,
-  warningCooldownInMilliseconds,
-} = require("../util/constants");
+const { warningCooldownInMilliseconds } = require("../util/constants");
 const Mailer = require("../util/Mailer");
 const log = require("../util/Logger");
 
@@ -100,54 +96,67 @@ class SensorManager {
   }
 
   async checkLimitsAndSendWarningEmails() {
-    if (
-      this.sensor.temperature > minimalTriggerTemperature ||
-      this.sensor.humidity > minimalTriggerHumiity
-    ) {
-      log.info("Temperature or humidity higher than limit");
+    const eligibleUsers = {};
+    const minLastAlertTime = Date.now() - warningCooldownInMilliseconds;
 
-      const warningsRef = db.doc(`sensor/${this.sensor.id}/data/warnings`);
-
-      warningsRef
+    try {
+      await db
+        .collection("users")
+        .where("temperature", "<=", this.sensor.temperature)
+        .where("sendAlerts", "==", true)
         .get()
-        .then(async (doc) => {
-          if (!doc.exists) {
-            await this.createWarnings();
-            return;
-          }
-
-          const { emails, lastSendTime } = doc.data();
-
-          if (Date.now() - warningCooldownInMilliseconds > lastSendTime) {
-            log.info("Cooldown passed, sending emails...");
-
-            warningsRef
-              .set({ lastSendTime: Date.now() }, { merge: true })
-              .then(async () => {
-                for (let i = 0; i < emails.length; ++i) {
-                  try {
-                    await Mailer.sendEmail({
-                      to: emails[i],
-                      subject: `UPOZORENJE: Senzor ${this.sensor.name}`,
-                      text: `Senzor ${this.sensor.name} je pročitao vrednost koja prelazi dozvoljenu granicu.\n\nTrenutno stanje senzora:\nTemperatura: ${this.sensor.temperature}°C\nVlažnost: ${this.sensor.humidity}%`,
-                    });
-                  } catch (err) {
-                    log.error(`Error while sending email to ${emails[i]}`);
-                    log.error(err);
-                  }
-                }
-                log.info("Emails sent");
-              })
-              .catch((err) => {
-                log.error("Error while updating warnings/sending emails");
-                log.error(err);
-              });
-          }
-        })
-        .catch((err) => {
-          log.error("Failed to send warning emails");
-          log.error(err);
+        .then((docs) => {
+          docs.forEach((doc) => {
+            if (doc.data().lastAlertTime <= minLastAlertTime) {
+              eligibleUsers[doc.id] = doc.data();
+            }
+          });
         });
+
+      await db
+        .collection("users")
+        .where("humidity", "<=", this.sensor.humidity)
+        .where("sendAlerts", "==", true)
+        .get()
+        .then((docs) => {
+          docs.forEach((doc) => {
+            if (doc.data().lastAlertTime <= minLastAlertTime) {
+              eligibleUsers[doc.id] = doc.data();
+            }
+          });
+        });
+    } catch (err) {
+      log.error("Error getting users eligible for warnings");
+      log.error(err);
+      return;
+    }
+
+    const eligibleCount = Object.keys(eligibleUsers).length;
+    if (eligibleCount > 0) {
+      log.info(`${eligibleCount} eligible user(s) for alerts`);
+    }
+
+    for (const email in eligibleUsers) {
+      try {
+        await Mailer.sendEmail({
+          to: email,
+          subject: `UPOZORENJE: Senzor ${this.sensor.name}`,
+          text: `Senzor ${this.sensor.name} je pročitao vrednost koja prelazi dozvoljenu granicu.\n\nTrenutno stanje senzora:\nTemperatura: ${this.sensor.temperature}°C\nVlažnost: ${this.sensor.humidity}%`,
+        });
+        log.info(`Sent warning to ${email}`);
+      } catch (err) {
+        log.error(`Error while sending email to ${email}`);
+        log.error(err);
+      }
+
+      try {
+        await db
+          .doc(`users/${email}`)
+          .set({ lastAlertTime: Date.now() }, { merge: true });
+      } catch (err) {
+        log.error("Error while updating lastAlertTime");
+        log.error(err);
+      }
     }
   }
 
