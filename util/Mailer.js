@@ -10,6 +10,7 @@ class Mailer {
 
   sendEmail({ to, subject, text }) {
     const message = {
+      from: "unic-monitoring@no-reply.com",
       to,
       subject,
       text,
