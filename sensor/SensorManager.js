@@ -24,6 +24,7 @@ class SensorManager {
     this.initializeData();
     await this.initializeSensorInFirestore();
     await this.initializeDayInFirestore();
+    await this.initializeMovingAverage();
 
     this.startNewDayJob();
     this.startSensorUpdateJob();
@@ -204,6 +205,14 @@ class SensorManager {
     const data = {
       t: this.sensor.temperature,
       h: this.sensor.humidity,
+      at:
+        this.data.movingAverageArray
+          .map((p) => p.temperature)
+          .reduce((a, b) => a + b, 0) / this.data.movingAverageArray.length,
+      ah:
+        this.data.movingAverageArray
+          .map((p) => p.humidity)
+          .reduce((a, b) => a + b, 0) / this.data.movingAverageArray.length,
       ts: Date.now(),
     };
 
@@ -332,6 +341,73 @@ class SensorManager {
     return true;
   }
 
+  /**
+   * Initializes moving average calculation. Makes no changes to Firebase.
+   */
+  async initializeMovingAverage() {
+    const ref = db.doc(`sensor/${this.sensor.id}/data/${this.data.date}`);
+
+    await ref
+      .get()
+      .then((doc) => {
+        if (doc.exists) {
+          this.data.movingAverageArray = doc
+            .data()
+            .data.filter((p) => p.ts > Date.now() - 1000 * 60 * 60)
+            .map((p) => ({ temperature: p.t, humidity: p.h, timestamp: p.ts }));
+
+          log.info("Initialized moving average calculation");
+        }
+      })
+      .catch((err) => {
+        log.error("Error while initializing moving average calculation");
+        log.error(err);
+      });
+
+    if (
+      !this.data.movingAverageArray ||
+      this.data.movingAverageArray.length === 0
+    ) {
+      let success = false;
+      let tries = 0;
+
+      while (!success && tries < 3) {
+        try {
+          tries++;
+
+          await this.sensor.sync();
+
+          this.data.movingAverageArray = [
+            {
+              temperature: this.sensor.temperature,
+              humidity: this.sensor.humidity,
+              timestamp: Date.now(),
+            },
+          ];
+
+          success = true;
+
+          log.info("Initialized moving average calculation manually");
+        } catch (err) {
+          log.error(
+            `Error while initializing moving average calculation manually | Try: ${tries}`
+          );
+          log.error(err);
+        }
+      }
+
+      if (!success) {
+        this.data.movingAverageArray = [
+          {
+            temperature: 20,
+            humidity: 40,
+            timestamp: Date.now(),
+          },
+        ];
+      }
+    }
+  }
+
   deleteOldDataInFirestore() {
     const lastDayToKeepTimestamp =
       getCurrentDateUnixTime() - timespanToKeepInMilliseconds;
@@ -378,6 +454,16 @@ class SensorManager {
    */
   updateData() {
     let dataChanged = false;
+
+    this.data.movingAverageArray.push({
+      temperature: this.sensor.temperature,
+      humidity: this.sensor.humidity,
+      timestamp: Date.now(),
+    });
+
+    this.data.movingAverageArray = this.data.movingAverageArray.filter(
+      (p) => p.timestamp > Date.now() - 1000 * 60 * 60
+    );
 
     const newAverageTemperature = calculateAverage(
       this.data.averageTemperature,
