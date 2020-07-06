@@ -329,8 +329,6 @@ class SensorManager {
         log.error(err);
       });
 
-    await this.createWarnings();
-
     return true;
   }
 
@@ -365,21 +363,6 @@ class SensorManager {
             log.error(err);
           })
       );
-  }
-
-  createWarnings() {
-    const warningsRef = db.doc(`sensor/${this.sensor.id}/data/warnings`);
-
-    return warningsRef
-      .create({
-        emails: [],
-        lastSendTime: -1,
-      })
-      .then(() => log.info("Warnings created"))
-      .catch((err) => {
-        log.error("Failed to create warnings");
-        log.error(err);
-      });
   }
 
   initializeData() {
