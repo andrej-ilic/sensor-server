@@ -442,10 +442,15 @@ class SensorManager {
   }
 
   initializeData() {
+    let lastMovingAverageArray;
+    if (this.data) {
+      lastMovingAverageArray = this.data.movingAverageArray;
+    }
+
     this.data = {
       count: 0,
       date: getCurrentDate(),
-      movingAverageArray: this.data.movingAverageArray || [],
+      movingAverageArray: lastMovingAverageArray || [],
     };
   }
 
