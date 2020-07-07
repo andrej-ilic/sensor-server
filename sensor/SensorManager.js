@@ -205,16 +205,24 @@ class SensorManager {
     const data = {
       t: this.sensor.temperature,
       h: this.sensor.humidity,
-      at:
-        this.data.movingAverageArray
-          .map((p) => p.temperature)
-          .reduce((a, b) => a + b, 0) / this.data.movingAverageArray.length,
-      ah:
-        this.data.movingAverageArray
-          .map((p) => p.humidity)
-          .reduce((a, b) => a + b, 0) / this.data.movingAverageArray.length,
       ts: Date.now(),
     };
+
+    if (
+      this.data &&
+      this.data.movingAverageArray &&
+      this.data.movingAverageArray.length > 0
+    ) {
+      data.at =
+        this.data.movingAverageArray
+          .map((p) => p.temperature)
+          .reduce((a, b) => a + b, 0) / this.data.movingAverageArray.length;
+
+      data.ah =
+        this.data.movingAverageArray
+          .map((p) => p.humidity)
+          .reduce((a, b) => a + b, 0) / this.data.movingAverageArray.length;
+    }
 
     return await ref
       .set(
