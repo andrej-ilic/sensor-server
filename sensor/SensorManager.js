@@ -445,6 +445,7 @@ class SensorManager {
     this.data = {
       count: 0,
       date: getCurrentDate(),
+      movingAverageArray: this.data.movingAverageArray || [],
     };
   }
 
