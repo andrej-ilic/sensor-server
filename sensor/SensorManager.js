@@ -4,6 +4,7 @@ const {
   getCurrentDate,
   calculateAverage,
   getCurrentDateUnixTime,
+  getDateFromUnixTime,
 } = require("../util");
 const {
   warningCooldownInMilliseconds,
@@ -40,7 +41,7 @@ class SensorManager {
     this.newDayJob = new CronJob("0 0 0 * * *", async () => {
       this.initializeData();
       await this.initializeDayInFirestore();
-      this.deleteOldDataInFirestore();
+      await this.deleteOldDataInFirestore();
     });
 
     this.newDayJob.start();
@@ -74,7 +75,7 @@ class SensorManager {
     this.dataInsertJob = new CronJob("32 3-59/4 * * * *", async () => {
       try {
         await this.sensor.sync();
-        this.insertSensorData();
+        await this.insertSensorData();
       } catch (err) {
         log.error(err);
       }
@@ -416,23 +417,24 @@ class SensorManager {
     }
   }
 
-  deleteOldDataInFirestore() {
+  async deleteOldDataInFirestore() {
     const lastDayToKeepTimestamp =
       getCurrentDateUnixTime() - timespanToKeepInMilliseconds;
 
-    db.collection(`sensor/${this.sensor.id}/data`)
+    await db
+      .collection(`sensor/${this.sensor.id}/data`)
       .where("timestamp", "<", lastDayToKeepTimestamp)
       .get()
-      .then((docs) => {
-        docs.forEach((doc) =>
-          doc.ref
+      .then(async (docs) => {
+        for (let i = 0; i < docs.docs.length; ++i) {
+          await docs.docs[i].ref
             .delete()
-            .then(() => log.info(`Deleted day ${doc.id}`))
+            .then(() => log.info(`Deleted day ${docs.docs[i].id}`))
             .catch((err) => {
-              log.error(`Error while deleting day ${doc.id}`);
+              log.error(`Error while deleting day ${docs.docs[i].id}`);
               log.error(err);
-            })
-        );
+            });
+        }
       })
       .catch((err) => {
         log.error("Error while deleting old data");
@@ -440,11 +442,29 @@ class SensorManager {
       })
       .finally(() =>
         db
-          .doc(`sensor/${this.sensor.id}`)
-          .set({ firstDayTimestamp: lastDayToKeepTimestamp }, { merge: true })
-          .catch((err) => {
-            log.error("Error while setting new firstDayTimestamp");
-            log.error(err);
+          .collection(`sensor/${this.sensor.id}/data`)
+          .orderBy("timestamp", "asc")
+          .limit(1)
+          .get()
+          .then((docs) => {
+            if (!docs.empty) {
+              db.doc(`sensor/${this.sensor.id}`)
+                .set(
+                  { firstDayTimestamp: docs.docs[0].data().timestamp },
+                  { merge: true }
+                )
+                .then(() =>
+                  log.info(
+                    `Set first day as ${getDateFromUnixTime(
+                      docs.docs[0].data().timestamp
+                    )}`
+                  )
+                )
+                .catch((err) => {
+                  log.error("Error while setting new firstDayTimestamp");
+                  log.error(err);
+                });
+            }
           })
       );
   }
