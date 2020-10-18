@@ -9,8 +9,9 @@
     "dotenv": "^8.2.0",
     "express": "^4.17.1",
     "fast-xml-parser": "^3.17.4",
-    "firebase-admin": "^8.12.1",
+    "firebase-admin": "^9.2.0",
     "moment": "^2.26.0",
+    "node-fetch": "^2.6.1",
     "nodemailer": "^6.4.10",
     "read-last-lines": "^1.7.2",
     "winston": "^3.3.3"
