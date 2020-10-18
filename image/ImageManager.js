@@ -2,6 +2,7 @@ const fs = require("fs");
 const fetch = require("node-fetch");
 const CronJob = require("cron").CronJob;
 const { admin, db } = require("../firebase");
+const log = require("../util/Logger");
 
 class ImageManager {
   constructor(url, fileName) {
@@ -15,8 +16,13 @@ class ImageManager {
     }
 
     this.job = new CronJob("0 * * * * *", async () => {
-      await this._downloadImage();
-      await this._uploadImageToFirebase();
+      try {
+        await this._downloadImage();
+        await this._uploadImageToFirebase();
+        log.info("Updated image");
+      } catch {
+        log.error("Failed to update image");
+      }
     });
 
     this.job.start();
