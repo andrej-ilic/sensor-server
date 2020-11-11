@@ -1,11 +1,13 @@
 const nodemailer = require("nodemailer");
-
-const nodemailerConfigPath = process.env.NODEMAILER_CONFIG_PATH;
-const nodemailerConfig = require(`${nodemailerConfigPath}`);
+const nodemailerSendgrid = require("nodemailer-sendgrid");
 
 class Mailer {
   constructor() {
-    this.transporter = nodemailer.createTransport(nodemailerConfig);
+    this.transporter = nodemailer.createTransport(
+      nodemailerSendgrid({
+        apiKey: process.env.SG_API_KEY,
+      })
+    );
   }
 
   sendEmail({ to, subject, text }) {
